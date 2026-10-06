@@ -1,0 +1,206 @@
+CREATE DATABASE ENERGYDB2;
+USE ENERGYDB2;
+CREATE TABLE country (
+    CID VARCHAR(10) PRIMARY KEY,
+    Country VARCHAR(100) UNIQUE
+);
+SELECT * FROM COUNTRY;
+
+-- 2. emission_3 table
+CREATE TABLE emission_3 (
+    country VARCHAR(100),
+    energy_type VARCHAR(50),
+    year INT,
+    emission INT,
+    per_capita_emission DOUBLE,
+    FOREIGN KEY (country) REFERENCES country(Country)
+);
+
+SELECT * FROM EMISSION_3;
+
+
+-- 3. population table
+CREATE TABLE population (
+    countries VARCHAR(100),
+    year INT,
+    Value DOUBLE,
+    FOREIGN KEY (countries) REFERENCES country(Country)
+);
+
+SELECT * FROM POPULATION;
+
+-- 4. production table
+CREATE TABLE production (
+    country VARCHAR(100),
+    energy VARCHAR(50),
+    year INT,
+    production INT,
+    FOREIGN KEY (country) REFERENCES country(Country)
+);
+
+
+SELECT * FROM PRODUCTION;
+
+-- 5. gdp_3 table
+CREATE TABLE gdp_3 (
+    Country VARCHAR(100),
+    year INT,
+    Value DOUBLE,
+    FOREIGN KEY (Country) REFERENCES country(Country)
+);
+
+SELECT * FROM GDP_3;
+
+-- 6. consumption table
+CREATE TABLE consumption (
+    country VARCHAR(100),
+    energy VARCHAR(50),
+    year INT,
+    consumption INT,
+    FOREIGN KEY (country) REFERENCES country(Country)
+);
+
+SELECT * FROM CONSUMPTION;
+SHOW TABLES;
+
+--  What is the total emission per country for the most recent year available?
+SELECT country, SUM(emission) AS total_emission
+FROM emission_3
+WHERE year = (
+    SELECT MAX(year )
+    FROM emission_3
+)
+GROUP BY country;
+
+--  What are the top 5 countries by GDP in the most recent year?
+SELECT Country, Value AS GDP
+FROM gdp_3
+WHERE year = (
+    SELECT MAX(year)
+    FROM gdp_3
+)
+ORDER BY Value DESC
+LIMIT 5;
+
+--  Compare energy production and consumption by country and year. 
+SELECT 
+	p.COUNTRY,
+    p.ENERGY,
+    p.YEAR,
+    p.PRODUCTION,
+    c.CONSUMPTION
+FROM PRODUCTION p JOIN CONSUMPTION c
+ON p.COUNTRY = c.COUNTRY
+AND p.YEAR = c.YEAR
+AND p.ENERGY = c.ENERGY;    
+
+-- Which energy types contribute most to emissions across all countries?
+SELECT ENERGY_TYPE,TOTAL_EMISSION,
+DENSE_RANK() OVER (ORDER BY TOTAL_EMISSION DESC) EMISSION_RANK FROM
+(SELECT ENERGY_TYPE,SUM(EMISSION) AS TOTAL_EMISSION FROM EMISSION_3 GROUP BY ENERGY_TYPE) X;
+
+-- How have global emissions changed year over year?
+SELECT YEAR,SUM(EMISSION) AS TOTAL_EMISSION
+FROM EMISSION_3
+GROUP BY YEAR;
+
+ -- What is the trend in GDP for each country over the given years?
+ SELECT COUNTRY,YEAR, VALUE AS GDP
+ FROM GDP_3
+ ORDER BY COUNTRY,YEAR;
+ 
+ -- How has population growth affected total emissions in each country?
+ 
+SELECT P.COUNTRIES, P.VALUE POPULATION ,P.YEAR,SUM(E.EMISSION) TOTAL_EMISSION FROM 
+POPULATION P JOIN EMISSION_3 E ON P.COUNTRIES=E.COUNTRY AND P.YEAR=E.YEAR
+GROUP BY P.COUNTRIES,P.YEAR,P.VALUE
+ORDER BY P.COUNTRIES,P.YEAR; 
+  
+ -- Has energy consumption increased or decreased over the years for major economies?
+SELECT 
+    COUNTRY,YEAR,CONSUMPTION AS ENERGY_CONSUMPTION,
+    LAG(CONSUMPTION) OVER (
+        PARTITION BY COUNTRY -- partition by country : each country will separately analyze.
+        ORDER BY YEAR
+    ) AS PREVIOUS_YEAR_CONSUMPTION
+FROM CONSUMPTION;
+
+-- What is the average yearly change in emissions per capita for each country?
+
+SELECT E.COUNTRY,E.YEAR,SUM(E.EMISSION) / P.VALUE AS EMISSION_PER_CAPITA
+FROM EMISSION_3 E
+JOIN POPULATION P
+    ON E.COUNTRY = P.COUNTRIES
+    AND E.YEAR = P.YEAR
+GROUP BY E.COUNTRY,E.YEAR,P.VALUE
+ORDER BY E.COUNTRY, E.YEAR;
+
+-- What is the emission-to-GDP ratio for each country by year?
+
+SELECT E.COUNTRY,E.YEAR,G.VALUE AS GDP,SUM(E.EMISSION) AS TOTAL_EMISSION,SUM(E.EMISSION) / G.VALUE AS EMISSION_TO_GDP_RATIO
+FROM EMISSION_3 E JOIN GDP_3 G ON E.COUNTRY = G.COUNTRY AND E.YEAR = G.YEAR
+GROUP BY E.COUNTRY,E.YEAR,G.VALUE
+ORDER BY E.COUNTRY,E.YEAR;
+
+-- What is the energy consumption per capita for each country over the last decade?
+
+SELECT C.COUNTRY, C. YEAR, SUM(C.CONSUMPTION) AS TOTAL_CONSUMPTION, P. VALUE AS POPULATION,
+SUM(C.CONSUMPTION)/P.VALUE AS ENERGY_CONSUMPTION_PER_CAPITA
+FROM CONSUMPTION C JOIN POPULATION P ON C.COUNTRY=P.COUNTRIES AND C.YEAR = P.YEAR
+GROUP BY C.COUNTRY,C.YEAR, P.VALUE
+ORDER BY C.COUNTRY,C.YEAR;
+
+-- How does energy production per capita vary across countries?
+
+SELECT PR.COUNTRY, PR. YEAR, SUM(PR.PRODUCTION) AS TOTAL_PRODUCTION, P. VALUE AS POPULATION,
+SUM(PR.PRODUCTION)/P.VALUE AS ENERGY_PRODUCTION_PER_CAPIΤΑ
+FROM PRODUCTION PR JOIN POPULATION P ON PR.COUNTRY = P.COUNTRIES AND PR.YEAR = P.YEAR
+GROUP BY PR.COUNTRY,PR.YEAR,P.VALUE
+ORDER BY PR.COUNTRY,PR.YEAR;
+
+-- Which countries have the highest energy consumption relative to GDP?
+
+ SELECT C.COUNTRY,C.YEAR, SUM(C.CONSUMPTION) AS TOTAL_CONSUMPTION, G.VALUE AS GDP,
+ SUM(C.CONSUMPTION) / G.VALUE AS CONSUMPTION_TO_GDP_RATIO
+ FROM CONSUMPTION C JOIN GDP_3 G ON C.COUNTRY = G.COUNTRY AND C.YEAR = G.YEAR
+ GROUP BY C.COUNTRY,C.YEAR,G.VALUE
+ ORDER BY CONSUMPTION_TO_GDP_RATIO DESC;
+ 
+-- What are the top 10 countries by population and how do their emissions compare?
+
+ SELECT P.COUNTRIES AS COUNTRY,P.YEAR,P.VALUE AS POPULATION,
+ SUM(E.EMISSION) AS TOTAL_EMISSION
+ FROM POPULATION P JOIN EMISSION_3 E ON P.COUNTRIES = E.COUNTRY AND P.YEAR = E.YEAR
+ GROUP BY P.COUNTRIES,P.YEAR,P.VALUE
+ ORDER BY POPULARTION DESC
+ LIMIT 10;
+ 
+ -- Which countries have improved (reduced) their per capita emissions the most over the last decade?
+ SELECT A.COUNTRY,
+       A.PER_CAPITA_EMISSION AS EMISSION_2020,
+       B.PER_CAPITA_EMISSION AS EMISSION_2023,
+       A.PER_CAPITA_EMISSION - B.PER_CAPITA_EMISSION AS REDUCTION
+FROM EMISSION_3 A
+JOIN EMISSION_3 B
+    ON A.COUNTRY = B.COUNTRY
+WHERE A.YEAR = 2020
+  AND B.YEAR = 2023
+ORDER BY REDUCTION DESC;
+ 
+ -- What is the global share (%) of emissions by country?
+ SELECT COUNTRY,SUM(EMISSION) AS TOTAL_EMISSION,
+    ROUND(SUM(EMISSION) / (SELECT SUM(EMISSION) FROM EMISSION_3) * 100,3) AS GLOBAL_EMISSION_SHARE_PERCENT
+FROM EMISSION_3
+GROUP BY COUNTRY
+ORDER BY GLOBAL_EMISSION_SHARE_PERCENT DESC;
+
+-- What is the global average GDP, emission, and population by year?
+SELECT G.YEAR,AVG(G.VALUE) AS AVG_GDP,AVG(E.TOTAL_EMISSION) AS AVG_EMISSION,AVG(P.VALUE) AS AVG_POPULATION
+FROM GDP_3 G
+JOIN (SELECT COUNTRY,YEAR,SUM(EMISSION) AS TOTAL_EMISSION
+    FROM EMISSION_3
+    GROUP BY COUNTRY, YEAR
+) E ON G.COUNTRY = E.COUNTRY AND G.YEAR = E.YEAR
+JOIN POPULATION P ON G.COUNTRY = P.COUNTRIES AND G.YEAR = P.YEAR
+GROUP BY G.YEAR
+ORDER BY G.YEAR;
